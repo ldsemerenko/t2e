@@ -4,14 +4,17 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
-public class t2eManager {
+public class T2EManager {
     private final String url = "jdbc:postgresql://localhost:5432/guestengine";
     private final String user = "guestengine";
     private final String pass = "guestengine";
+
     public final String schema = "guestengine";
+    public final String projectName = "guestengine";
+
     private Connection connection;
 
-    public Connection getConnection() {
+    private Connection getConnection() {
         if(connection == null) {
             System.out.println(url);
             try {
@@ -23,6 +26,30 @@ public class t2eManager {
         return connection;
     }
 
+
+    public String getCodeForRepository(String table_name){
+        String result = "";
+        result += "package " + projectName + ".repository;\n\n";
+        result += "import org.springframework.data.jpa.repository.JpaRepository;\n";
+        result += "import " + projectName + ".domain."+ firstUp(table_name) + ";\n\n";
+        result += "public interface "+ firstUp(table_name) + "Repository extends JpaRepository<" + firstUp(table_name) + ", Integer>{";
+        return result + "}";
+    }
+
+
+    public String getCodeForEntity(String table_name){
+        String result = "";
+
+        result += "import javax.persistence.*;\n\n@Entity\n";
+        result += "@Table(schema = \""+ schema + "\", name = \""+ table_name + "\")\n";
+        result += "public class " + firstUp(table_name) + " {\n";
+        result += getColumns(table_name);
+        if(result.contains("private Timestamp")){result = "import java.sql.Timestamp;\n" + result;}
+        if(result.contains("private BigDecima")){result = "import java.math.BigDecimal;\n" + result;}
+        if(result.contains("private Date")){result = "import java.util.Date;\n" + result;}
+        result = "package " + projectName + ".domain;\n\n" + result;
+        return result + "}";
+    }
 
     public List<String> getTableList(){
         List<String> tableList = new ArrayList<String>();
@@ -41,7 +68,7 @@ public class t2eManager {
         return tableList;
     }
 
-    public String getColumns(String table_name){
+    private String getColumns(String table_name){
         String result = "";
         Statement statement;
         try {
@@ -64,29 +91,39 @@ public class t2eManager {
     private String convertToField(int position, String name, String type) {
         String result = "";
         if (position == 1) {
-            result += "\t" + "@Id";
+            result += "\t" + "@Id\n" + "\t@GeneratedValue(strategy = GenerationType.IDENTITY)\n";
         }
-        result += "\t" + "@Column(name = \"" + name + "\", columnDefinition = \"" + type + "\")";
-        result += "\tprivate " + toJavaType(type) + " " + toCamelCase(name);
+        result += "\t" + "@Column(name = \"" + name + "\", columnDefinition = \"" + type + "\")\n";
+        result += "\tprivate " + toJavaType(type) + " " + toCamelCase(name) + ";\n";
         return result;
     }
 
     private String toCamelCase(String name) {
-        if(!name.contains("_")) return name.substring(0,1).toUpperCase() + name.substring(1,name.length());
-        String result = name.split("_")[0].substring(0,1).toUpperCase() + name.substring(1,name.length());
-        return result + toCamelCase(name.substring(name.indexOf("_")));
+        if(!name.contains("_")) return firstUp(name);
+        return firstUp(name.split("_")[0]) + toCamelCase(name.substring(name.indexOf("_") + 1));
+    }
+
+    public String firstUp(String text){
+        return text.substring(0,1).toUpperCase() + text.substring(1,text.length());
     }
 
     private String toJavaType(String type) {
         String sqlType = type.split(" ")[0];
         if(sqlType.startsWith("int")) return "Integer";
+        if(sqlType.startsWith("smallint")) return "Integer";
+        if(sqlType.startsWith("numeric")) return "BigDecimal";
         if(sqlType.startsWith("varc")) return "String";
         if(sqlType.startsWith("char")) return "String";
         if(sqlType.startsWith("bigint")) return "Long";
         if(sqlType.startsWith("decimal")) return "Double";
         if(sqlType.startsWith("text")) return "String";
-        System.exit(-5);
+        if(sqlType.startsWith("text")) return "String";
+        if(sqlType.startsWith("date")) return "Date";
+        if(sqlType.startsWith("timestamp")) return "Timestamp";
+
+        System.out.println("unknown type >-> " + type);
         return "";
+        //for other types http://www.service-architecture.com/articles/database/mapping_sql_and_java_data_types.html
     }
 
 }
